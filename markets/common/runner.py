@@ -69,7 +69,10 @@ def run_cli(store_key: str, scrape: Callable, *, enrich: Optional[Callable] = No
     import config
 
     load_env(args.env)
-    zips = [z.strip() for z in (args.zip or ",".join(config.SCRAPE_ZIP_CODES)).split(",") if z.strip()] or [config.SCRAPE_ZIP_CODE]
+    # config was imported before .env was loaded: read the CEP list from the environment now
+    import os
+    env_zips = os.getenv("SCRAPE_ZIP_CODES") or os.getenv("SCRAPE_ZIP_CODE") or ",".join(config.SCRAPE_ZIP_CODES)
+    zips = [z.strip() for z in (args.zip or env_zips).split(",") if z.strip()] or [config.SCRAPE_ZIP_CODE]
     per_store = bool(config.store_meta(store_key).get("per_store"))
     if not per_store:
         zips = zips[:1]  # national prices: one run, whatever the CEP list
@@ -115,6 +118,8 @@ def run_cli(store_key: str, scrape: Callable, *, enrich: Optional[Callable] = No
                 print(f"[{store_key}] scrape zip={zip_code} done in {(time.time() - t_zip) / 60:.1f} min: {result}")
                 if result.get("upserted"):
                     saved_any = True
+                elif result.get("duplicate_store"):
+                    pass  # this CEP resolved to a store already scraped in this run
                 elif not args.limit:
                     print(f"[{store_key}] ERROR: no offers were saved for {zip_code} - failing the run so it is noticed")
                     ok = False

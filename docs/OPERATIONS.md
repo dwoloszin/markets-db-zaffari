@@ -48,7 +48,7 @@ keeps what was selected for every `store_id`.
 
 ## Several stores per market (several CEPs)
 
-Prices depend on the store for **Atacadão, Carrefour and Higas** only
+Prices depend on the store for **Atacadão, Carrefour, Higas and Coop** only
 (`config.STORES[..]["per_store"] = True`; measured 2026-09-09: 4-32% of prices differ
 between Atacadão sellers, 13-42% between Carrefour stores). Give a comma-separated CEP
 list and each of those markets is scraped once per CEP, each store under its own
@@ -84,6 +84,9 @@ What happens with N stores:
   runner IP. Only a run that saved nothing goes red.
 * With several CEPs the starting CEP is rotated every 4-hour slot, so a market whose run
   gets cut short still refreshes every store over the day.
+* Two CEPs that resolve to the same store are scraped once: the per-store scrapers call
+  `db.begin_store(store_id)` after resolving the store and skip the duplicate
+  (`duplicate_store` in the result, not counted as a failure).
 * `python -m db.db_manager stores <market>` lists the stores present;
   `drop-store <market> <store_id>` removes one.
 * **Which stores exist?** `python -m tools.list_stores` writes `exports/stores_<market>.csv`
@@ -107,6 +110,26 @@ python -m db.db_manager sync-hub                     # optional consolidated app
 ```
 
 `--post` in `main.py` does mark-stale + prune for the markets that just ran.
+
+### GitHub's 60-day auto-disable
+
+GitHub disables a scheduled workflow after 60 days with no repository activity, and warns by
+email ("The Scrape workflow ... will be disabled soon"). A schedule firing does not count as
+activity, and the market repos only write to Neon, so nothing committed to them after a deploy.
+
+The last step of `deploy/store-scrape.yml` handles this. It pushes a small `.last_run` file when
+the newest commit is over 30 days old, whatever the scrape outcome. A deploy deletes `.last_run`,
+which is harmless because the next keep-alive recreates it. To test one repo:
+
+```bash
+gh workflow run Scrape -R dwoloszin/markets-db-davo -f probe=true -f force_keepalive=true
+```
+
+If a workflow was already disabled, re-enable it, because a commit alone does not turn it back on:
+
+```bash
+gh workflow enable Scrape -R dwoloszin/markets-db-<slug>
+```
 
 ## Troubleshooting
 

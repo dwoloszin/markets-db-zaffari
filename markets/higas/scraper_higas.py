@@ -135,6 +135,9 @@ def scrape(db, zip_code: str, limit: Optional[int] = None) -> Dict[str, int]:
     session = make_session()
     store = resolve_store(session, db, zip_code)
     store_id = str(store["id"])
+    if not db.begin_store(store_id):
+        print(f"[higas] store {store_id} already scraped in this run (another CEP maps to it) - skipping")
+        return {"upserted": 0, "skipped": 0, "with_barcode": 0, "duplicate_store": True}
     subdomain = store.get("subdomain") or DEFAULT_SUBDOMAIN
     web_base = f"https://{subdomain}.instabuy.app.br"
     headers = {"x-store-id": store_id, "Origin": web_base, "Referer": web_base + "/", "Accept": "application/json",
@@ -259,6 +262,9 @@ def probe(zip_code: str) -> None:
 
 
 class _NullDB:
+    def begin_store(self, *a, **k):
+        return True
+
     def save_store_info(self, *a, **k):
         pass
 
